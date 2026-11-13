@@ -6,6 +6,8 @@ No recorte analisado, 564 de 2.337 identidades elegíveis voltaram em até sete 
 
 [Acesse a demonstração do painel](https://retencao.ox.opalstacked.com/).
 
+No Opalstack, o proxy encaminha as requisições HTTPS ao Streamlit na porta interna do aplicativo. O cron do usuário do painel verifica o serviço a cada minuto e tenta iniciá-lo quando o processo está ausente. Os logs de execução ficam em `logs/streamlit.log` no servidor.
+
 ![Visão geral do painel com indicadores de retenção, série semanal e matriz de coortes](docs/painel.jpg)
 
 ## Como rodar
