@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 
@@ -12,6 +13,12 @@ if __name__ == "__main__":
                 f"Carga interrompida: {exc}\n"
                 "Confira o acesso ao Hugging Face ou coloque todos os Parquet em data/raw."
             ) from exc
-    raise SystemExit(subprocess.call([
-        sys.executable, "-m", "streamlit", "run", str(ROOT / "app.py")
-    ], cwd=ROOT))
+    worker = subprocess.Popen([sys.executable, str(ROOT / "etl_job.py"), "--loop"], cwd=ROOT)
+    try:
+        raise SystemExit(subprocess.call([
+            sys.executable, "-m", "streamlit", "run", str(ROOT / "app.py"),
+            "--server.address", "127.0.0.1",
+        ], cwd=ROOT, env={**os.environ, "ETL_LOCAL_ADMIN": "1"}))
+    finally:
+        worker.terminate()
+        worker.wait()

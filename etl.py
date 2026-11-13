@@ -38,9 +38,9 @@ def digest(*parts):
     return hashlib.sha256(json.dumps(parts, ensure_ascii=False).encode()).hexdigest()
 
 
-def source_files(audit=None):
+def source_files(audit=None, revision=None):
     local = sorted((DATA / "raw").rglob("*.parquet"))
-    if local:
+    if local and revision is None:
         if audit is not None:
             audit["fonte"] = "Parquet local"
         yield from local
@@ -51,7 +51,7 @@ def source_files(audit=None):
     )))
     if token := os.getenv("HF_TOKEN"):
         session.headers["Authorization"] = f"Bearer {token}"
-    revision = os.getenv("WILDCHAT_REVISION", REVISION)
+    revision = revision or os.getenv("WILDCHAT_REVISION", REVISION)
     base = "https://huggingface.co"
     response = session.get(f"{base}/api/datasets/{REPO}/revision/{revision}", timeout=30)
     response.raise_for_status()
@@ -166,12 +166,12 @@ def cohort(conversations, identity, cutoff, gap_minutes=30):
                   "tema", "turnos", "resposta_chars", "resposta", "estado", "dia_retorno"]]
 
 
-def build():
+def build(revision=None):
     DATA.mkdir(exist_ok=True)
     audit = Counter()
     rows = []
     downloaded = []
-    for file in source_files(audit):
+    for file in source_files(audit, revision):
         audit["arquivos processados"] += 1
         if file.is_relative_to(DATA / "downloads"):
             downloaded.append(file)

@@ -1,10 +1,14 @@
 from html import escape
+from datetime import datetime, timedelta
+from hmac import compare_digest
+import os
 import altair as alt
 import pandas as pd
 import streamlit as st
 
 from analysis import MIN_N, effects, read, weekly_change, wilson
 from etl import DB, ROOT
+from etl_job import DAYS, MESSAGES, ZONE, save, settings
 
 PURPLE = "#6b18d4"
 st.set_page_config(page_title="Retenção do Assistente de IA", layout="wide")
@@ -164,6 +168,57 @@ def findings(results):
     st.caption("Associações ajustadas para o recorte selecionado.")
 
 
+def job_time(value):
+    if not value:
+        return "Ainda não executou"
+    return datetime.fromisoformat(value).astimezone(ZONE).strftime("%d/%m/%Y às %H:%M")
+
+
+def etl_page(job):
+    st.title("Agendamento do ETL")
+    st.write("O job verifica o WildChat-1M no horário escolhido. Uma nova revisão dispara a carga do recorte brasileiro.")
+    heartbeat = job["heartbeat"]
+    online = heartbeat and datetime.now(ZONE) - datetime.fromisoformat(heartbeat) < timedelta(minutes=3)
+    a, b, c = st.columns(3)
+    a.metric("Agendamento", "Ativo" if job["enabled"] else "Desativado")
+    b.metric("Último início", job_time(job["started"]))
+    c.metric("Resultado", MESSAGES.get(job["status"], "Sem execução"))
+    st.caption(f"Agendador: {'respondendo' if online else 'sem sinal recente'} · Horário de Brasília")
+    if job["finished"]:
+        st.caption(f"Último término: {job_time(job['finished'])}")
+    st.button("Atualizar status")
+    allowed = os.environ.get("ETL_LOCAL_ADMIN") == "1"
+    if password := os.environ.get("ETL_ADMIN_PASSWORD"):
+        supplied = st.text_input("Senha de administração", type="password")
+        allowed = compare_digest(password.encode(), supplied.encode())
+    if not allowed:
+        st.info("A configuração do agendamento está disponível para o administrador.")
+    enabled = st.toggle("Ativar agendamento", value=bool(job["enabled"]), disabled=not allowed)
+    frequencies = {"Diário": "daily", "Semanal": "weekly"}
+    label = st.radio("Frequência", list(frequencies), index=int(job["frequency"] == "weekly"),
+                     horizontal=True, disabled=not allowed)
+    hour = st.time_input("Horário", value=datetime.strptime(job["hour"], "%H:%M").time(),
+                         step=60, disabled=not allowed)
+    day = DAYS[job["weekday"]]
+    if label == "Semanal":
+        day = st.selectbox("Dia da semana", DAYS, index=job["weekday"], disabled=not allowed)
+    if st.button("Salvar agendamento", type="primary", disabled=not allowed) and allowed:
+        save(enabled, frequencies[label], hour.strftime("%H:%M"), DAYS.index(day))
+        st.session_state["etl_saved"] = True
+        st.rerun()
+    if st.session_state.pop("etl_saved", False):
+        st.success("Agendamento salvo.")
+
+
+st.sidebar.markdown('<div class="brand"><span>◈</span>Painel</div>', unsafe_allow_html=True)
+pages = ["Visão geral", "Fatores de retenção", "Exploração de dados", "Usuários e coortes",
+         "Qualidade e incidentes", "Agendamento do ETL", "Documentação"]
+page = st.sidebar.radio("Navegação", pages, label_visibility="collapsed")
+job = settings()
+if page == "Agendamento do ETL":
+    etl_page(job)
+    st.stop()
+
 if not DB.exists():
     st.error("Execute python run.py para preparar a base analítica.")
     st.stop()
@@ -174,10 +229,6 @@ if "dia_retorno" not in schema["name"].tolist():
     st.info("A base anterior precisa ser atualizada para calcular a matriz de coortes. Execute python run.py --rebuild.")
     st.stop()
 
-st.sidebar.markdown('<div class="brand"><span>◈</span>Painel</div>', unsafe_allow_html=True)
-pages = ["Visão geral", "Fatores de retenção", "Exploração de dados", "Usuários e coortes",
-         "Qualidade e incidentes", "Documentação"]
-page = st.sidebar.radio("Navegação", pages, label_visibility="collapsed")
 st.sidebar.divider()
 st.sidebar.markdown("**Filtros globais**")
 rules = {"IP com hash": "ip", "IP + navegador": "ip_ua", "IP · intervalo de 60 min": "ip_60"}
@@ -231,6 +282,8 @@ with source:
     observed = query("SELECT valor FROM auditoria WHERE item = ?", ("fim observado UTC",), version)
     if not observed.empty:
         st.caption(f"Dados observados até {pd.Timestamp(observed.iat[0, 0]):%d/%m/%Y}")
+    st.caption(f"Job ETL · {'Ativo' if job['enabled'] else 'Desativado'}")
+    st.caption(f"Última execução · {job_time(job['started'])}")
 st.caption(f"Coortes de {pd.Timestamp(start):%d/%m/%Y} a {pd.Timestamp(end):%d/%m/%Y} · {identity}")
 
 if page == "Visão geral":
