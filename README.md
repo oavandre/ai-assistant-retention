@@ -4,6 +4,8 @@ Pipeline em Python e painel em Streamlit para analisar o retorno em até sete di
 
 No recorte analisado, 564 de 2.337 identidades elegíveis voltaram em até sete dias (24,1%). A análise usa IP com hash como aproximação de identidade. Os efeitos estimados descrevem associações. [Veja os resultados](RESULTADOS.md).
 
+[Acesse a demonstração do painel](https://retencao.ox.opalstacked.com/).
+
 ## Como rodar
 
 Com Python 3.13, execute na raiz do repositório:
