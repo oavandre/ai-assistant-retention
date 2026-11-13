@@ -63,6 +63,10 @@ Para explicar uma semana, a decomposição simétrica soma variação da composi
 
 **Escolha.** A visão geral começa pelo retorno em cada 100 identidades elegíveis, com contadores e intervalo de confiança. Em seguida, relaciona primeira conversa, tarefas de código e escolha do modelo a decisões de investigação ou experimento. Esses temas correspondem aos três achados documentados; não são anunciados como os três maiores efeitos em todos os filtros. Cada comparação mostra referência, tamanho do grupo e incerteza. Quando o grupo é a referência, está ausente ou não há estimativa válida, a tela informa que a comparação está indisponível. Recomendações são hipóteses para validar, sem promessa de ganho causal. Os demais fatores continuam acessíveis no gráfico e na tela analítica.
 
+### Leitura dos fatores e da mudança semanal
+
+A tela de fatores mostra a referência de cada comparação no gráfico e explica ponto, intervalo de confiança e linha de zero antes das estimativas. A tabela detalhada fica recolhida. Na investigação semanal, pontos e intervalos de Wilson mostram as taxas e sua incerteza; barras separam a contribuição da composição dos perfis e a das taxas dentro deles. A seleção automática da maior variação elegível é explicitamente exploratória. Quando a cobertura dos perfis é parcial, uma terceira barra mostra a diferença entre a variação total e a soma dos componentes comparáveis, sem atribuir causa aos perfis excluídos. Nenhuma decomposição é apresentada como evidência causal.
+
 ## Uso de IA
 
 Usei Codex para ler o enunciado, estruturar o código e revisar as definições e a documentação. A validação inclui a execução do pipeline, o teste da janela e as verificações das telas conforme registradas na entrega. O tempo dedicado pelo candidato deve ser registrado pelo próprio candidato antes do envio.

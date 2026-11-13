@@ -163,7 +163,7 @@ def forest(results, limit=None):
         st.info("Base insuficiente ou fatores redundantes para estimar diferenças neste recorte.")
         return
     frame = results.head(limit).copy() if limit else results.copy()
-    frame["Comparação"] = frame["Fator"] + " · " + frame["Grupo"]
+    frame["Comparação"] = frame["Fator"] + " · " + frame["Grupo"] + " vs. " + frame["Referência"]
     order = frame["Comparação"].tolist()
     y = alt.Y("Comparação:N", sort=order, title=None, axis=alt.Axis(labelLimit=220))
     chart = alt.Chart(frame)
@@ -180,7 +180,71 @@ def forest(results, limit=None):
     )
     zero = alt.Chart(frame.iloc[:1]).mark_rule(color="#554665", strokeDash=[4, 3]).encode(x=alt.datum(0))
     st.altair_chart((zero + intervals + dots).properties(height=max(155, 27 * len(frame))), width="stretch")
-    st.caption("Diferenças em pontos percentuais com IC 95%. A referência de cada comparação aparece ao passar o mouse.")
+    st.caption("Diferenças em pontos percentuais com IC 95%, ordenadas pela magnitude. Passe o mouse para ver a comparação completa e o tamanho do grupo.")
+
+
+def weekly_story(rows):
+    st.subheader("O que mudou de uma semana para outra?")
+    movement = weekly_change(rows)
+    if not movement:
+        st.info("Sem duas semanas consecutivas com cobertura suficiente para decompor a variação. Amplie os filtros.")
+        return
+    previous, current, total, mix, within, coverage = movement
+    sample = rows.loc[rows.semana.isin([previous, current])]
+    summary = sample.groupby("semana")["voltou"].agg(["size", "sum"]).reset_index()
+    summary["Semana"] = pd.to_datetime(summary.semana).dt.strftime("%d/%m/%Y")
+    summary["Taxa"] = summary["sum"] / summary["size"]
+    intervals = [wilson(k, n) for k, n in zip(summary["sum"], summary["size"])]
+    summary["Inferior"], summary["Superior"] = zip(*intervals)
+    delta = f"{100 * total:+.1f}".replace(".", ",")
+    st.write(f"**Variação de {delta} pontos percentuais** entre as coortes de "
+             f"{pd.Timestamp(previous):%d/%m/%Y} e {pd.Timestamp(current):%d/%m/%Y}.")
+    st.caption("Par selecionado automaticamente pela maior variação absoluta entre semanas consecutivas que passam nos critérios de cobertura. "
+               "É uma investigação exploratória, não uma tendência confirmada.")
+    left, right = st.columns(2)
+    with left.container(border=True):
+        st.markdown("**Quanto o retorno mudou?**")
+        chart = alt.Chart(summary)
+        x = alt.X("Semana:N", title="Semana da primeira sessão", sort=summary.Semana.tolist(), axis=alt.Axis(labelAngle=0))
+        bars = chart.mark_rule(color=PURPLE, strokeWidth=3).encode(
+            x=x, y=alt.Y("Inferior:Q", title="Retorno em 7 dias", axis=alt.Axis(format=".0%"), scale=alt.Scale(zero=True)),
+            y2="Superior:Q")
+        points = chart.mark_circle(color=PURPLE, size=110).encode(x=x, y="Taxa:Q",
+            tooltip=["Semana", alt.Tooltip("size:Q", title="Elegíveis"), alt.Tooltip("sum:Q", title="Retornos"),
+                     alt.Tooltip("Taxa:Q", format=".1%"), alt.Tooltip("Inferior:Q", format=".1%"),
+                     alt.Tooltip("Superior:Q", format=".1%")])
+        st.altair_chart((bars + points).properties(height=240), width="stretch")
+        for _, item in summary.iterrows():
+            st.caption(f"{item.Semana}: {integer(item['sum'])}/{integer(item['size'])} = {percent(item.Taxa)} "
+                       f"· IC 95% {percent(item.Inferior)} a {percent(item.Superior)}")
+        st.caption("Ponto: taxa observada. Barra: intervalo de confiança de 95%. Amostras pequenas geram mais incerteza.")
+    with right.container(border=True):
+        st.markdown("**Mudou quem chegou ou o retorno de cada perfil?**")
+        parts = [("Perfil de quem chegou", mix * 100), ("Retorno dentro dos perfis", within * 100)]
+        if coverage < 1 - 1e-9:
+            parts.append(("Diferença de cobertura", (total - mix - within) * 100))
+        contributions = pd.DataFrame(parts, columns=["Componente", "Pontos percentuais"])
+        chart = alt.Chart(contributions)
+        bars = chart.mark_bar().encode(
+            y=alt.Y("Componente:N", title=None, sort=None, axis=alt.Axis(labelLimit=180)),
+            x=alt.X("Pontos percentuais:Q", title="Contribuição para a variação (p.p.)"),
+            color=alt.condition(alt.datum["Pontos percentuais"] >= 0, alt.value(PURPLE), alt.value("#ba3859")),
+            tooltip=["Componente", alt.Tooltip("Pontos percentuais:Q", format="+.2f")])
+        zero = chart.mark_rule(color="#554665").encode(x=alt.datum(0))
+        st.altair_chart((bars + zero).properties(height=240), width="stretch")
+        st.caption(f"Perfis: modelo (GPT-4 ou demais) e idioma (português ou demais). "
+                   f"Cobertura mínima nas duas semanas: {percent(coverage)}.")
+        if coverage < 1 - 1e-9:
+            st.caption("A diferença de cobertura reconcilia a variação total com os perfis comparáveis; não identifica a causa nos perfis excluídos.")
+        st.write("**Perfil de quem chegou:** mudança na proporção de cada perfil. "
+                 "**Dentro dos perfis:** mudança na taxa de retorno de grupos comparáveis.")
+    dominant = "mudança do perfil de quem chegou" if abs(mix) > abs(within) else "variação do retorno dentro dos perfis"
+    st.info(f"Nos perfis comparáveis, o componente de maior magnitude foi a {dominant}. "
+            "Isso orienta onde investigar; não prova que uma alteração no assistente causou o movimento.")
+    st.caption("Próxima decisão: conferir mudanças de produto e cobertura da coleta nessas semanas, "
+               "acompanhar outras coortes e medir resolução da tarefa antes de agir sobre essa oscilação. "
+               "Fonte: WildChat-1M · Brasil · recorte e regra de identidade selecionados. "
+               "Critérios: 30 elegíveis por semana, 10 por perfil em cada semana e cobertura mínima de 80%.")
 
 
 def findings(results):
@@ -403,21 +467,24 @@ if page == "Visão geral":
                    "As barras mostram a incerteza: quando cruzam zero, a direção da associação não é clara.")
 elif page == "Fatores de retenção":
     results = estimate(eligible)
+    st.subheader("Quais experiências estão associadas a voltar?")
+    st.write("Compare a diferença de retorno entre cada grupo e sua referência, após o ajuste pelas características observadas.")
+    st.caption("Fonte: WildChat-1M · Brasil · primeira conversa das identidades com sete dias completos no recorte selecionado.")
     with st.container(border=True):
-        st.subheader("Efeitos ajustados no retorno em 7 dias")
+        st.markdown("**Como ler o gráfico**")
+        st.write("O ponto mostra a diferença estimada; a barra mostra o intervalo de confiança de 95%. "
+                 "À direita de zero: maior retorno. À esquerda: menor retorno. "
+                 "Se a barra cruza zero, não há uma direção clara para a associação.")
+        st.caption("Exemplo de leitura: +5 pontos percentuais significa uma diferença estimada de 5 retornos a cada 100 identidades, não um ganho garantido.")
+    with st.container(border=True):
+        st.subheader("Comparações ajustadas · retorno em 7 dias")
         forest(results)
-        st.caption("O modelo ajusta por características observadas da primeira conversa e mês. Intenção e qualidade percebida podem confundir a associação.")
+        st.caption("O ajuste considera mês, modelo, idioma, tema, horário, turnos, extensão e possível recusa da resposta, quando há variação suficiente. "
+                   "Intenção e qualidade percebida não são medidas. As associações não demonstram causalidade; explorar muitos fatores aumenta a chance de destaques ao acaso.")
         if not results.empty:
-            st.dataframe(results.round(2), hide_index=True)
-    st.subheader("O que mudou de uma semana para outra?")
-    if movement := weekly_change(eligible):
-        previous, current, total, mix, within, coverage = movement
-        st.write(f"De {previous} a {current}, a taxa variou **{total*100:+.2f} p.p.**")
-        st.write(f"Nos perfis comparáveis (cobertura mínima de {coverage:.0%}), "
-                 f"**{mix*100:+.2f} p.p.** vieram da composição e **{within*100:+.2f} p.p.** "
-                 "da variação dentro dos perfis.")
-    else:
-        st.info("Sem duas semanas consecutivas com cobertura suficiente para decompor a variação.")
+            with st.expander("Detalhes das estimativas e tamanho dos grupos"):
+                st.dataframe(results.round(2), hide_index=True)
+    weekly_story(eligible)
 elif page == "Exploração de dados":
     st.subheader("Distribuição de conversas")
     dims = {"Semana": "semana", "Modelo": "modelo", "Idioma": "idioma", "Estado": "estado",
