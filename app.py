@@ -381,7 +381,76 @@ elif page == "Usuários e coortes":
         sensitivity["regra"] = sensitivity["regra"].map({v: k for k, v in rules.items()})
     st.dataframe(sensitivity, hide_index=True)
 elif page == "Qualidade e incidentes":
-    with st.expander("Investigação da semana de 20/11/2023", expanded=True):
+    st.subheader("A retenção caiu ou mudou a forma de contar?")
+    st.caption("Caso do desafio · novembro de 2023 · Fonte: endpoint e relatório fornecidos no PDF, páginas 5 e 6. "
+               "Os valores abaixo são do caso de investigação, não da base pública carregada. Os filtros globais não se aplicam a este caso.")
+    st.info("O painel marcou uma queda, mas o relatório não. Há uma divergência na definição de usuário; "
+            "o impacto exato precisa ser reconciliado antes de atribuir a queda ao produto.")
+
+    incident = pd.DataFrame([
+        ("06/11", "Painel", 1210, 375), ("13/11", "Painel", 1188, 368),
+        ("20/11", "Painel", 2034, 366), ("06/11", "Relatório", 1150, 345),
+        ("13/11", "Relatório", 1131, 351), ("20/11", "Relatório", 1172, 352),
+    ], columns=["Semana", "Fonte", "Novos usuários", "Retornos em 7 dias"])
+    incident["Taxa"] = incident["Retornos em 7 dias"] / incident["Novos usuários"]
+    left, middle, right = st.columns(3)
+    left.metric("Painel · 20/11", "18,0%", help="366 retornos ÷ 2.034 novos usuários, pela regra do painel legado.")
+    middle.metric("Relatório · 20/11", "30,0%", help="352 retornos ÷ 1.172 novos usuários, pela regra do relatório.")
+    right.metric("Diferença entre fontes", "12,0 p.p.", help="Relatório menos painel; não representa um efeito causal.")
+    colors = alt.Scale(domain=["Painel", "Relatório"], range=[PURPLE, "#168477"])
+    left, right = st.columns(2)
+    with left.container(border=True):
+        st.markdown("**1. Apenas o painel registra a queda**")
+        st.altair_chart(alt.Chart(incident).mark_line(point=True).encode(
+            x=alt.X("Semana:O", title="Semana de chegada · 2023", axis=alt.Axis(labelAngle=0)),
+            y=alt.Y("Taxa:Q", title="Retorno em até 7 dias", axis=alt.Axis(format=".0%"),
+                    scale=alt.Scale(domain=[0, .4])),
+            color=alt.Color("Fonte:N", scale=colors, title=None),
+            tooltip=["Semana", "Fonte", "Novos usuários", "Retornos em 7 dias",
+                     alt.Tooltip("Taxa:Q", format=".1%")],
+        ).properties(height=240), width="stretch")
+        st.caption("Taxa = retornos em até 7 dias ÷ novos usuários de cada fonte. "
+                   "A comparação expõe regras diferentes de contagem, não estima o efeito de uma mudança no produto.")
+    with right.container(border=True):
+        st.markdown("**2. O aumento está na contagem de novos usuários**")
+        counts = incident.loc[incident.Fonte.eq("Painel")].melt(
+            id_vars=["Semana"], value_vars=["Novos usuários", "Retornos em 7 dias"],
+            var_name="Indicador", value_name="Quantidade")
+        st.altair_chart(alt.Chart(counts).mark_bar().encode(
+            x=alt.X("Semana:O", title="Semana de chegada · 2023", axis=alt.Axis(labelAngle=0)),
+            xOffset="Indicador:N", y=alt.Y("Quantidade:Q", title="Contagem no painel"),
+            color=alt.Color("Indicador:N", scale=alt.Scale(
+                domain=["Novos usuários", "Retornos em 7 dias"], range=[PURPLE, "#168477"]), title=None),
+            tooltip=["Semana", "Indicador", "Quantidade"],
+        ).properties(height=240), width="stretch")
+        st.caption("De 13/11 para 20/11: +846 novos usuários contados e −2 retornos. "
+                   "O aumento do denominador explica a queda aritmética; sua origem ainda requer reconciliação.")
+
+    st.markdown("**3. Por que as duas fontes podem discordar?**")
+    left, right = st.columns(2)
+    with left.container(border=True):
+        st.markdown("**Painel: IP + navegador**")
+        st.write("Uma troca de navegador pode criar uma segunda identidade: o retorno passa a ser contado como uma nova pessoa.")
+    with right.container(border=True):
+        st.markdown("**Relatório: somente IP**")
+        st.write("A troca de navegador preserva a identidade. Ainda assim, IP é uma aproximação: pessoas podem compartilhar uma rede ou mudar de IP.")
+
+    left, right = st.columns(2)
+    with left.container(border=True):
+        st.markdown("**O que sabemos**")
+        st.markdown("- O código da carga usa uma identidade diferente da usada no relatório.\n"
+                    "- Um teste automatizado com dados sintéticos reproduz a perda de retorno após a troca de navegador.\n"
+                    "- O endpoint respondeu com sucesso; isso não garante que a métrica esteja correta.")
+    with right.container(border=True):
+        st.markdown("**O que falta confirmar**")
+        st.markdown("- Medir as duas regras sobre o mesmo snapshot original.\n"
+                    "- Conciliar país, sessões, duplicatas e janela de observação.\n"
+                    "- Reprocessar e validar o histórico antes de publicar uma taxa corrigida.")
+    st.warning("Decisão para o cliente: não mudar a estratégia do produto com base nesta queda isolada. "
+               "Primeiro, alinhar a definição de usuário e reconciliar as contagens.")
+    st.caption("Prevenção proposta: contrato único da métrica, testes de regressão e comparação periódica "
+               "entre o bruto e o painel. O teste existe no projeto; a reconciliação operacional do caso depende do snapshot original.")
+    with st.expander("Detalhes técnicos · diagnóstico, SQL, correção e teste", expanded=False):
         st.markdown((ROOT / "INCIDENTE.md").read_text(encoding="utf-8"))
 else:
     for name, filename in [("Resultados", "RESULTADOS.md"), ("Decisões", "DECISOES.md")]:
