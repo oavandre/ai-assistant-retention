@@ -168,9 +168,6 @@ def findings(results):
     st.caption("Associações ajustadas para o recorte selecionado.")
 
 
-ETL_PAGE = "Agendamento do ETL"
-
-
 def job_time(value):
     if not value:
         return "Ainda não executou"
@@ -217,7 +214,7 @@ def etl_sidebar(job, loaded_at):
     st.sidebar.divider()
     st.sidebar.button(
         "⚙ Configurar ETL", type="primary", width="stretch",
-        on_click=lambda: st.session_state.update(navigation=ETL_PAGE),
+        on_click=lambda: st.session_state.update(navigation=None),
     )
     st.sidebar.caption(f"Job ETL · {'Ativo' if job['enabled'] else 'Desativado'}")
     st.sidebar.caption(f"Última carga da base · {job_time(loaded_at)}")
@@ -227,7 +224,7 @@ def etl_sidebar(job, loaded_at):
 
 st.sidebar.markdown('<div class="brand"><span>◈</span>Painel</div>', unsafe_allow_html=True)
 pages = ["Visão geral", "Fatores de retenção", "Exploração de dados", "Usuários e coortes",
-         "Qualidade e incidentes", ETL_PAGE, "Documentação"]
+         "Qualidade e incidentes", "Documentação"]
 page = st.sidebar.radio("Navegação", pages, label_visibility="collapsed", key="navigation")
 job = settings()
 loaded_at = None
@@ -236,7 +233,7 @@ if DB.exists():
     loaded = query("SELECT valor FROM auditoria WHERE item = ?", ("carga concluída UTC",), version)
     if not loaded.empty:
         loaded_at = loaded.iat[0, 0]
-if page == ETL_PAGE:
+if page is None:
     etl_sidebar(job, loaded_at)
     etl_page(job, loaded_at)
     st.subheader("Auditoria da carga")
@@ -310,8 +307,6 @@ with source:
     observed = query("SELECT valor FROM auditoria WHERE item = ?", ("fim observado UTC",), version)
     if not observed.empty:
         st.caption(f"Dados observados até {pd.Timestamp(observed.iat[0, 0]):%d/%m/%Y}")
-    st.caption(f"Job ETL · {'Ativo' if job['enabled'] else 'Desativado'}")
-    st.caption(f"Última carga da base · {job_time(loaded_at)}")
 st.caption(f"Coortes de {pd.Timestamp(start):%d/%m/%Y} a {pd.Timestamp(end):%d/%m/%Y} · {identity}")
 
 if page == "Visão geral":
