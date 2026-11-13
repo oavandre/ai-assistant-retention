@@ -168,14 +168,16 @@ def findings(results):
     st.caption("Associações ajustadas para o recorte selecionado.")
 
 
+ETL_PAGE = "Agendamento do ETL"
+
+
 def job_time(value):
     if not value:
         return "Ainda não executou"
     return datetime.fromisoformat(value).astimezone(ZONE).strftime("%d/%m/%Y às %H:%M")
 
 
-def etl_page(job):
-    st.title("Agendamento do ETL")
+def etl_page(job, loaded_at):
     st.write("O job verifica o WildChat-1M no horário escolhido. Uma nova revisão dispara a carga do recorte brasileiro.")
     heartbeat = job["heartbeat"]
     online = heartbeat and datetime.now(ZONE) - datetime.fromisoformat(heartbeat) < timedelta(minutes=3)
@@ -184,6 +186,7 @@ def etl_page(job):
     b.metric("Último início", job_time(job["started"]))
     c.metric("Resultado", MESSAGES.get(job["status"], "Sem execução"))
     st.caption(f"Agendador: {'respondendo' if online else 'sem sinal recente'} · Horário de Brasília")
+    st.caption(f"Última carga da base · {job_time(loaded_at)}")
     if job["finished"]:
         st.caption(f"Último término: {job_time(job['finished'])}")
     st.button("Atualizar status")
@@ -210,20 +213,44 @@ def etl_page(job):
         st.success("Agendamento salvo.")
 
 
+def etl_sidebar(job, loaded_at):
+    st.sidebar.divider()
+    st.sidebar.button(
+        "⚙ Configurar ETL", type="primary", width="stretch",
+        on_click=lambda: st.session_state.update(navigation=ETL_PAGE),
+    )
+    st.sidebar.caption(f"Job ETL · {'Ativo' if job['enabled'] else 'Desativado'}")
+    st.sidebar.caption(f"Última carga da base · {job_time(loaded_at)}")
+    if job["started"]:
+        st.sidebar.caption(f"Última execução agendada · {job_time(job['started'])}")
+
+
 st.sidebar.markdown('<div class="brand"><span>◈</span>Painel</div>', unsafe_allow_html=True)
 pages = ["Visão geral", "Fatores de retenção", "Exploração de dados", "Usuários e coortes",
-         "Qualidade e incidentes", "Agendamento do ETL", "Documentação"]
-page = st.sidebar.radio("Navegação", pages, label_visibility="collapsed")
+         "Qualidade e incidentes", ETL_PAGE, "Documentação"]
+page = st.sidebar.radio("Navegação", pages, label_visibility="collapsed", key="navigation")
 job = settings()
-if page == "Agendamento do ETL":
-    etl_page(job)
+loaded_at = None
+if DB.exists():
+    version = DB.stat().st_mtime_ns
+    loaded = query("SELECT valor FROM auditoria WHERE item = ?", ("carga concluída UTC",), version)
+    if not loaded.empty:
+        loaded_at = loaded.iat[0, 0]
+if page == ETL_PAGE:
+    etl_sidebar(job, loaded_at)
+    etl_page(job, loaded_at)
+    st.subheader("Auditoria da carga")
+    if DB.exists():
+        st.dataframe(query("SELECT item, valor FROM auditoria", (), version), hide_index=True)
+    else:
+        st.info("A auditoria estará disponível após a primeira carga.")
     st.stop()
 
 if not DB.exists():
+    etl_sidebar(job, loaded_at)
     st.error("Execute python run.py para preparar a base analítica.")
     st.stop()
 
-version = DB.stat().st_mtime_ns
 schema = query("PRAGMA table_info(coortes)", (), version)
 if "dia_retorno" not in schema["name"].tolist():
     st.info("A base anterior precisa ser atualizada para calcular a matriz de coortes. Execute python run.py --rebuild.")
@@ -254,6 +281,7 @@ with st.sidebar.form("global_filters"):
     if st.form_submit_button("Aplicar filtros", type="primary", width="stretch"):
         st.session_state["filters"] = (period, dimensions, identity)
 
+etl_sidebar(job, loaded_at)
 (start, end), selected, identity = st.session_state.get(
     "filters", ((options[0], options[-1]), {}, next(iter(rules)))
 )
@@ -283,7 +311,7 @@ with source:
     if not observed.empty:
         st.caption(f"Dados observados até {pd.Timestamp(observed.iat[0, 0]):%d/%m/%Y}")
     st.caption(f"Job ETL · {'Ativo' if job['enabled'] else 'Desativado'}")
-    st.caption(f"Última execução · {job_time(job['started'])}")
+    st.caption(f"Última carga da base · {job_time(loaded_at)}")
 st.caption(f"Coortes de {pd.Timestamp(start):%d/%m/%Y} a {pd.Timestamp(end):%d/%m/%Y} · {identity}")
 
 if page == "Visão geral":
@@ -358,8 +386,6 @@ elif page == "Usuários e coortes":
         sensitivity["regra"] = sensitivity["regra"].map({v: k for k, v in rules.items()})
     st.dataframe(sensitivity, hide_index=True)
 elif page == "Qualidade e incidentes":
-    st.subheader("Auditoria da carga")
-    st.dataframe(query("SELECT item, valor FROM auditoria", (), version), hide_index=True)
     with st.expander("Investigação da semana de 20/11/2023", expanded=True):
         st.markdown((ROOT / "INCIDENTE.md").read_text(encoding="utf-8"))
 else:

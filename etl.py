@@ -213,6 +213,8 @@ def build(revision=None):
                 volume.groupby(dimension, observed=True).size().rename("conversas").reset_index().rename(
                     columns={dimension: "grupo"}
                 ).assign(dim=dimension).to_sql("uso", db, if_exists="append", index=False)
+            db.execute("INSERT INTO auditoria VALUES (?, ?)",
+                       ("carga concluída UTC", pd.Timestamp.now(tz="UTC").isoformat()))
         os.replace(staged, DB)
     for file in downloaded:
         try:
