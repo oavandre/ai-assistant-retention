@@ -6,6 +6,8 @@ No recorte analisado, 564 de 2.337 identidades elegíveis voltaram em até sete 
 
 [Acesse a demonstração do painel](https://retencao.ox.opalstacked.com/).
 
+![Visão geral do painel com indicadores de retenção, série semanal e matriz de coortes](docs/painel.jpg)
+
 ## Como rodar
 
 Com Python 3.13, execute na raiz do repositório:
