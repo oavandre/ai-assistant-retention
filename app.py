@@ -184,14 +184,55 @@ def forest(results, limit=None):
 
 
 def findings(results):
-    if results.empty:
-        st.caption("Amplie o recorte para estimar associações.")
+    topics = [
+        ("Primeira conversa", "Turnos", "4+",
+         "Testar uma sugestão opcional de continuidade e medir também a resolução da tarefa.",
+         "Mais turnos podem refletir interesse ou dificuldade. Não é uma meta de prolongar conversas."),
+        ("Tarefas de código", "Tema", "Código",
+         "Revisar a classificação dos temas e medir se as tarefas de código foram resolvidas antes de priorizar mudanças.",
+         "O tema vem de palavras-chave. Compare também as regras de sessão em Usuários e coortes."),
+        ("Escolha do modelo", "Modelo", "GPT-4",
+         "Comparar modelos em um experimento com distribuição aleatória, acompanhando retenção, qualidade e custo.",
+         "Quem escolhe cada modelo pode ter objetivos e experiência diferentes."),
+    ]
+    for column, (title, factor, group, decision, limitation) in zip(st.columns(3), topics):
+        with column.container(border=True):
+            st.markdown(f"**{title}**")
+            match = results.loc[results.Fator.eq(factor) & results.Grupo.eq(group)] if not results.empty else results
+            if match.empty:
+                st.write("Comparação indisponível neste recorte.")
+                st.caption("O grupo pode ser a referência, estar ausente ou não ter observações suficientes. Amplie os filtros para comparar.")
+                continue
+            row = match.iloc[0]
+            effect, low, high = (row[name] for name in ["Efeito (p.p.)", "Limite inferior", "Limite superior"])
+            number = lambda value: f"{value:+.1f}".replace(".", ",")
+            st.markdown(f"**{number(effect)} pontos percentuais**")
+            st.caption(f"{group} versus {row['Referência']} · {integer(row['n'])} identidades no grupo")
+            st.write(f"Intervalo de confiança de 95%: **{number(low)} a {number(high)} p.p.**")
+            if low <= 0 <= high:
+                st.write("Não há direção clara: o intervalo admite aumento e redução do retorno.")
+            else:
+                direction = "maior" if effect > 0 else "menor"
+                st.write(f"Neste recorte, o grupo apresentou {direction} retorno após o ajuste pelas características observadas.")
+            st.markdown(f"**Próxima decisão:** {decision}")
+            st.caption(limitation)
+    st.caption("Fonte: WildChat-1M · Brasil · primeira conversa das identidades elegíveis no recorte selecionado. "
+               "Estimativas ajustadas por mês e características observadas; associações, não efeitos causais. "
+               "Um ponto percentual equivale a uma diferença de um retorno a cada 100 identidades.")
+
+
+def overview_story(weekly):
+    n, k = int(weekly.elegiveis.sum()), int(weekly.voltaram.sum())
+    if n < MIN_N:
+        st.info("Há menos de 30 identidades com sete dias completos neste recorte. Amplie os filtros para interpretar a retenção.")
         return
-    for _, row in results.head(3).iterrows():
-        effect = f"{row['Efeito (p.p.)']:+.1f}".replace(".", ",")
-        st.markdown(f'<div class="finding"><b>{escape(row["Grupo"])}</b> vs. '
-                    f'{escape(row["Referência"])} · <b>{effect} p.p.</b></div>', unsafe_allow_html=True)
-    st.caption("Associações ajustadas para o recorte selecionado.")
+    low, high = wilson(k, n)
+    st.subheader(f"Cerca de {round(100 * k / n)} em cada 100 identidades voltaram em até sete dias")
+    st.write(f"**{integer(k)} retornos entre {integer(n)} identidades acompanhadas por sete dias completos.** "
+             f"Retenção de {percent(k / n)}, com intervalo de confiança de 95% de {percent(low)} a {percent(high)}.")
+    st.caption("Retorno significa iniciar outra sessão em até 168 horas da primeira. "
+               "Identidade é uma aproximação por IP ou IP e navegador, conforme o filtro; não uma contagem exata de pessoas. "
+               "O intervalo resume incerteza estatística, mas não elimina erros de identidade ou lacunas da coleta.")
 
 
 def job_time(value):
@@ -344,7 +385,11 @@ with source:
 st.caption(f"Coortes de {pd.Timestamp(start):%d/%m/%Y} a {pd.Timestamp(end):%d/%m/%Y} · {identity}")
 
 if page == "Visão geral":
+    overview_story(weekly)
     cards(weekly, volume)
+    results = estimate(eligible)
+    st.subheader("Três perguntas para orientar o próximo investimento")
+    findings(results)
     left, right = st.columns([1.15, 1])
     with left.container(border=True, key="trend"):
         st.subheader("Evolução da retenção (7 dias)")
@@ -352,19 +397,10 @@ if page == "Visão geral":
     with right.container(border=True, key="cohort"):
         st.subheader("Retenção por coorte")
         cohort_heatmap(rows)
-    results = estimate(eligible)
-    left, right = st.columns([1.7, 1])
-    with left.container(border=True, key="overview-effects"):
-        st.subheader("Fatores associados ao retorno")
+    with st.expander("Compare os demais fatores associados ao retorno"):
         forest(results, limit=6)
-    with right:
-        with st.container(border=True, key="findings"):
-            st.subheader("Principais achados")
-            findings(results)
-        with st.container(border=True, key="recommendations"):
-            st.subheader("Recomendações")
-            st.markdown("- Testar uma sugestão de continuidade na primeira conversa.\n"
-                        "- Medir resolução da tarefa e retenção no mesmo experimento.")
+        st.caption("Na página Fatores de retenção, consulte todas as comparações e a investigação da mudança semanal. "
+                   "As barras mostram a incerteza: quando cruzam zero, a direção da associação não é clara.")
 elif page == "Fatores de retenção":
     results = estimate(eligible)
     with st.container(border=True):

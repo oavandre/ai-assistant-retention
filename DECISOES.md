@@ -55,6 +55,14 @@ Para explicar uma semana, a decomposição simétrica soma variação da composi
 
 **Privacidade e decisões em aberto.** O painel exibe agregados e o snapshot analítico exclui texto, IP, agente e identificadores. Confirmar com produto a definição de usuário, tamanho mínimo, horizonte e se será possível instrumentar uma conta consentida e feedback. Validar com responsáveis pelos dados as regras de acesso, retenção e transferência antes de operar.
 
+## BDR 03 · Leitura da visão geral
+
+**Contexto.** O público do desafio é de negócio, sem perfil técnico. Uma lista de coeficientes não explica sozinha onde investir.
+
+**Opções.** Destacar automaticamente os três maiores coeficientes ou apresentar três perguntas estáveis de produto com os resultados do recorte selecionado.
+
+**Escolha.** A visão geral começa pelo retorno em cada 100 identidades elegíveis, com contadores e intervalo de confiança. Em seguida, relaciona primeira conversa, tarefas de código e escolha do modelo a decisões de investigação ou experimento. Esses temas correspondem aos três achados documentados; não são anunciados como os três maiores efeitos em todos os filtros. Cada comparação mostra referência, tamanho do grupo e incerteza. Quando o grupo é a referência, está ausente ou não há estimativa válida, a tela informa que a comparação está indisponível. Recomendações são hipóteses para validar, sem promessa de ganho causal. Os demais fatores continuam acessíveis no gráfico e na tela analítica.
+
 ## Uso de IA
 
 Usei Codex para ler o enunciado, estruturar o código e revisar as definições e a documentação. A validação inclui a execução do pipeline, o teste da janela e as verificações das telas conforme registradas na entrega. O tempo dedicado pelo candidato deve ser registrado pelo próprio candidato antes do envio.
