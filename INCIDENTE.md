@@ -45,6 +45,15 @@ Contaria também IPs com mais de um agente por semana, agentes ausentes, datas c
 
 ## Correção e publicação
 
+O teste de regressão em `test_incidente.py` reproduz a fragmentação com quatro conversas sintéticas e executa a consulta semanal do projeto. Rode `python -m unittest -v test_incidente` na raiz do repositório.
+
+| Regra de identidade | Novos elegíveis | Retornos em 7 dias | Taxa |
+|---|---:|---:|---:|
+| IP + navegador | 3 | 0 | 0% |
+| IP | 2 | 1 | 50% |
+
+No exemplo, o mesmo IP inicia uma sessão no Brasil e volta dois dias depois com outro navegador. Com a regra antiga de identidade, a segunda sessão cria uma nova identidade. A quarta conversa é de outro país e fica fora do recorte, de modo que o segundo IP brasileiro continua sem retorno. Todos os usuários têm a janela completa. Os resultados demonstram o mecanismo com a métrica do projeto. A reprodução dos valores do incidente depende do snapshot operacional original.
+
 Na carga legada, validaria a presença de IP e substituiria a chave pela identidade compartilhada com o relatório.
 
 ```python
@@ -61,4 +70,4 @@ Reprocessaria todo o histórico em uma tabela paralela, pois identidades já fra
 
 **Durante.** “O painel mostra 18%, mas a contagem de novos usuários subiu sem uma queda correspondente nos retornos. Estamos conciliando a definição usada pelo painel e pelo relatório. Segure decisões sobre a queda até reconciliarmos os números.”
 
-**Após a conciliação.** “Identificamos [regra confirmada] como responsável por [diferença medida]. Reprocessamos as semanas afetadas. A taxa validada foi [numerador / denominador], e o painel já usa a mesma regra do relatório.”
+**Conclusão com a evidência disponível.** “Confirmamos que o painel e o relatório agrupavam usuários de formas diferentes. O teste mostrou que uma troca de navegador pode contar uma pessoa duas vezes e perder seu retorno. Para quantificar o impacto naquela semana e publicar uma taxa corrigida, precisamos reprocessar o snapshot original e conferir os dois contadores.”
