@@ -17,11 +17,29 @@ st.markdown("""<style>
 [data-testid="stSidebar"] label, [data-testid="stSidebar"] p {color:#f2e9ff}
 [data-testid="stSidebar"] [data-baseweb="select"] > div {background:#30204d; color:white; border-color:#6e5094}
 [data-testid="stSidebar"] [data-baseweb="select"] input {color:white}
-[data-testid="stSidebar"] [data-testid="stBaseButton-secondary"] {background:#30204d;border-color:#6e5094}
+[data-testid="stSidebar"] [data-testid="stBaseButton-secondary"] {
+  background:#eee3ff;color:#211239;border-color:#be9de7
+}
+[data-testid="stSidebar"] [data-testid="stBaseButton-secondary"] p {color:#211239}
+[data-testid="stSidebar"] [data-testid="stBaseButton-secondary"]:hover {background:#dfc8ff}
+[data-testid="stSidebarCollapseButton"] button {
+  color:#f6eeff;background:#392554;border:1px solid #8062a5;border-radius:8px
+}
+[data-testid="stSidebarCollapseButton"] button:hover,
+[data-testid="stSidebarCollapseButton"] button:focus-visible {
+  color:#fff;background:#513475;border-color:#bd9ee0
+}
+[data-testid="stSidebarCollapseButton"] button [data-testid="stIconMaterial"] {color:inherit}
+.etl-sidebar-load {color:#e2d1f5;font-size:.7rem;line-height:1.35}
 [data-testid="stSidebar"] [role="slider"] + div {color:#e5c8ff}
 [data-testid="stAppDeployButton"] {display:none}
 [data-testid="stMainBlockContainer"] {padding:2rem clamp(1rem,3vw,2rem) 2rem; max-width:1650px}
 [data-testid="stMainBlockContainer"] h1 {font-size:clamp(1.9rem,3.1vw,2.4rem);padding-bottom:.1rem}
+[data-testid="stMainBlockContainer"] [data-testid="stColumn"] {min-width:0}
+[data-testid="stMainBlockContainer"] [data-testid="stMarkdownContainer"] {
+  white-space:normal;overflow-wrap:anywhere
+}
+[data-testid="stMetricValue"] > div {white-space:normal;overflow-wrap:anywhere}
 .st-key-trend,.st-key-cohort,.st-key-overview-effects,.st-key-findings,.st-key-recommendations {
   background:#fff;border-radius:15px;box-shadow:0 2px 7px #2112390c
 }
@@ -41,9 +59,16 @@ st.markdown("""<style>
   [data-testid="stMainBlockContainer"] [data-testid="stColumn"]{width:100%!important;flex:auto!important}
 }
 .heat {width:100%;border-spacing:2px;text-align:center;font-size:.78rem}
+.heat-scroll {max-width:100%;overflow-x:auto}
 .heat th,.heat td {padding:6px 3px;white-space:nowrap}
 .heat th {background:#f3edf9}
 .finding {border-left:3px solid #b884f9;padding:0 0 0 .75rem;margin:.7rem 0;font-size:.9rem}
+[data-testid="stMainBlockContainer"]:has(.st-key-etl-content) {padding-top:4rem}
+.st-key-etl-content [data-testid="stVerticalBlock"] {gap:.65rem}
+.etl-status {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%, 150px),1fr));gap:8px}
+.etl-status div {padding:8px 10px;background:#fff;border:1px solid #ebe5f3;border-radius:8px;overflow-wrap:anywhere}
+.etl-status span,.etl-status strong {display:block;font-size:.8rem;line-height:1.35}
+.etl-status span {color:#524660}
 </style>""", unsafe_allow_html=True)
 
 
@@ -127,8 +152,9 @@ def cohort_heatmap(rows):
             cells.append(f'<td style="background:{color};color:{text}">{percent(value)}</td>')
         date = pd.Timestamp(week).strftime("%d/%m")
         body.append(f'<tr><th title="{len(group)} elegíveis">{date}</th>{"".join(cells)}</tr>')
-    st.markdown(f'<table class="heat"><thead><tr>{header}</tr></thead>'
-                f'<tbody>{"".join(body)}</tbody></table>', unsafe_allow_html=True)
+    st.markdown(f'<div class="heat-scroll" tabindex="0" role="region" aria-label="Tabela de coortes">'
+                f'<table class="heat"><thead><tr>{header}</tr></thead>'
+                f'<tbody>{"".join(body)}</tbody></table></div>', unsafe_allow_html=True)
     st.caption("D0 é a sessão inicial. D1–D7 mostram o retorno acumulado em até sete coortes recentes com pelo menos 30 elegíveis. — indica base pequena.")
 
 
@@ -175,34 +201,39 @@ def job_time(value):
 
 
 def etl_page(job, loaded_at):
-    st.write("O job verifica o WildChat-1M no horário escolhido. Uma nova revisão dispara a carga do recorte brasileiro.")
     heartbeat = job["heartbeat"]
     online = heartbeat and datetime.now(ZONE) - datetime.fromisoformat(heartbeat) < timedelta(minutes=3)
-    a, b, c = st.columns(3)
-    a.metric("Agendamento", "Ativo" if job["enabled"] else "Desativado")
-    b.metric("Último início", job_time(job["started"]))
-    c.metric("Resultado", MESSAGES.get(job["status"], "Sem execução"))
-    st.caption(f"Agendador: {'respondendo' if online else 'sem sinal recente'} · Horário de Brasília")
-    st.caption(f"Última carga da base · {job_time(loaded_at)}")
+    status = [
+        ("Agendamento", "Ativo" if job["enabled"] else "Desativado"),
+        ("Agendador", "Online" if online else "Sem sinal recente"),
+        ("Última carga", job_time(loaded_at)),
+    ]
+    if job["started"]:
+        status.append(("Último início", job_time(job["started"])))
+        status.append(("Resultado", MESSAGES.get(job["status"], "Sem execução")))
     if job["finished"]:
-        st.caption(f"Último término: {job_time(job['finished'])}")
-    st.button("Atualizar status")
+        status.append(("Último término", job_time(job["finished"])))
+    cells = "".join(f"<div><span>{label}</span><strong>{escape(value)}</strong></div>"
+                    for label, value in status)
+    st.markdown(f'<div class="etl-status">{cells}</div>', unsafe_allow_html=True)
     allowed = os.environ.get("ETL_LOCAL_ADMIN") == "1"
     if password := os.environ.get("ETL_ADMIN_PASSWORD"):
         supplied = st.text_input("Senha de administração", type="password")
         allowed = compare_digest(password.encode(), supplied.encode())
     if not allowed:
-        st.info("A configuração do agendamento está disponível para o administrador.")
+        st.caption("Somente consulta")
+    st.markdown("**Configuração**")
     enabled = st.toggle("Ativar agendamento", value=bool(job["enabled"]), disabled=not allowed)
     frequencies = {"Diário": "daily", "Semanal": "weekly"}
-    label = st.radio("Frequência", list(frequencies), index=int(job["frequency"] == "weekly"),
-                     horizontal=True, disabled=not allowed)
-    hour = st.time_input("Horário", value=datetime.strptime(job["hour"], "%H:%M").time(),
-                         step=60, disabled=not allowed)
+    frequency_col, hour_col, day_col = st.columns(3)
+    label = frequency_col.selectbox("Frequência", list(frequencies),
+                                    index=int(job["frequency"] == "weekly"), disabled=not allowed)
+    hour = hour_col.time_input("Horário de Brasília", value=datetime.strptime(job["hour"], "%H:%M").time(),
+                               step=60, disabled=not allowed)
     day = DAYS[job["weekday"]]
     if label == "Semanal":
-        day = st.selectbox("Dia da semana", DAYS, index=job["weekday"], disabled=not allowed)
-    if st.button("Salvar agendamento", type="primary", disabled=not allowed) and allowed:
+        day = day_col.selectbox("Dia da semana", DAYS, index=job["weekday"], disabled=not allowed)
+    if allowed and st.button("Salvar agendamento", type="primary"):
         save(enabled, frequencies[label], hour.strftime("%H:%M"), DAYS.index(day))
         st.session_state["etl_saved"] = True
         st.rerun()
@@ -216,8 +247,10 @@ def etl_sidebar(job, loaded_at):
         "⚙ Configurar ETL", type="primary", width="stretch",
         on_click=lambda: st.session_state.update(navigation=None),
     )
-    st.sidebar.caption(f"Job ETL · {'Ativo' if job['enabled'] else 'Desativado'}")
-    st.sidebar.caption(f"Última carga da base · {job_time(loaded_at)}")
+    st.sidebar.markdown(
+        f'<div class="etl-sidebar-load">Última carga da base · {escape(job_time(loaded_at))}</div>',
+        unsafe_allow_html=True,
+    )
     if job["started"]:
         st.sidebar.caption(f"Última execução agendada · {job_time(job['started'])}")
 
@@ -235,12 +268,13 @@ if DB.exists():
         loaded_at = loaded.iat[0, 0]
 if page is None:
     etl_sidebar(job, loaded_at)
-    etl_page(job, loaded_at)
-    st.subheader("Auditoria da carga")
-    if DB.exists():
-        st.dataframe(query("SELECT item, valor FROM auditoria", (), version), hide_index=True)
-    else:
-        st.info("A auditoria estará disponível após a primeira carga.")
+    with st.container(key="etl-content"):
+        etl_page(job, loaded_at)
+        st.markdown("**Auditoria da carga**")
+        if DB.exists():
+            st.dataframe(query("SELECT item, valor FROM auditoria", (), version), hide_index=True, height=260)
+        else:
+            st.caption("Disponível após a primeira carga.")
     st.stop()
 
 if not DB.exists():
