@@ -163,6 +163,8 @@ def forest(results, limit=None):
         st.info("Base insuficiente ou fatores redundantes para estimar diferenças neste recorte.")
         return
     frame = results.head(limit).copy() if limit else results.copy()
+    # Vega interprets dots in field names as nested property access.
+    frame["efeito_pp"] = frame["Efeito (p.p.)"]
     frame["Comparação"] = frame["Fator"] + " · " + frame["Grupo"] + " vs. " + frame["Referência"]
     order = frame["Comparação"].tolist()
     y = alt.Y("Comparação:N", sort=order, title=None, axis=alt.Axis(labelLimit=220))
@@ -171,10 +173,10 @@ def forest(results, limit=None):
         y=y, x=alt.X("Limite inferior:Q", title="Diferença ajustada (p.p.)"), x2="Limite superior:Q"
     )
     dots = chart.mark_circle(size=85, opacity=1).encode(
-        y=y, x="Efeito (p.p.):Q",
-        color=alt.condition(alt.datum["Efeito (p.p.)"] >= 0, alt.value(PURPLE), alt.value("#ba3859")),
+        y=y, x="efeito_pp:Q",
+        color=alt.condition(alt.datum.efeito_pp >= 0, alt.value(PURPLE), alt.value("#ba3859")),
         tooltip=["Fator", "Grupo", "Referência", "n",
-                 alt.Tooltip("Efeito (p.p.):Q", format=".2f"),
+                 alt.Tooltip("efeito_pp:Q", title="Diferença ajustada (p.p.)", format=".2f"),
                  alt.Tooltip("Limite inferior:Q", format=".2f"),
                  alt.Tooltip("Limite superior:Q", format=".2f")]
     )
@@ -495,6 +497,15 @@ elif page == "Exploração de dados":
     else:
         distribution = query("SELECT grupo, conversas FROM uso WHERE dim = ?", (dim,), version)
         st.caption("Esta distribuição abrange todo o histórico do Brasil.")
+    if not distribution.empty and distribution.conversas.sum() > 0:
+        largest = distribution.loc[distribution.conversas.idxmax()]
+        share = largest.conversas / distribution.conversas.sum()
+        label = f"Semana de {pd.Timestamp(largest.grupo):%d/%m/%Y}" if dim == "semana" else str(largest.grupo)
+        st.write(f"**Maior concentração: {label}**, com {integer(largest.conversas)} conversas "
+                 f"({percent(share)} do total desta distribuição).")
+        st.caption("Volume de uso não mede retenção nem qualidade da resposta. "
+                   "Fonte: WildChat-1M · Brasil. Grupos com menos de 30 conversas ficam ocultos; "
+                   "as barras exibem até 15 categorias. A participação acima usa todos os grupos.")
     distribution = distribution.query("conversas >= 30").sort_values("conversas", ascending=False)
     if dim == "semana":
         st.line_chart(distribution.sort_values("grupo"), x="grupo", y="conversas", color=PURPLE)
