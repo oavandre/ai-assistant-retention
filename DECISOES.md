@@ -69,4 +69,4 @@ A tela de fatores mostra a referência de cada comparação no gráfico e explic
 
 ## Uso de IA
 
-Usei Codex para ler o enunciado, estruturar o código e revisar as definições e a documentação. A validação inclui a execução do pipeline, o teste da janela e as verificações das telas conforme registradas na entrega. O tempo dedicado pelo candidato deve ser registrado pelo próprio candidato antes do envio.
+Usei Codex no discovery, código, análise e redação. A validação incluiu limites da janela de retorno, troca de navegador, comparação do SQL semanal com dados sintéticos e carga de Parquet até SQLite, com preservação da base após falha simulada. A revisão corrigiu a exposição de SQL como conteúdo principal para o cliente e o campo do gráfico que impedia exibir os pontos dos efeitos; descartou a interpretação do teste sintético como prova de que a taxa do incidente havia sido corrigida para 30%. As telas foram verificadas com filtros, base pequena e recortes vazios. O tempo aproximado dedicado pessoalmente pelo candidato permanece pendente de informação antes do envio.
