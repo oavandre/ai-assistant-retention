@@ -6,8 +6,8 @@ import venv
 
 
 def main():
-    if sys.version_info < (3, 13):
-        raise SystemExit("Use Python 3.13 ou superior para preparar o projeto.")
+    if sys.version_info[:2] != (3, 13):
+        raise SystemExit("Use Python 3.13, a versão validada para as dependências deste projeto.")
     root = Path(__file__).resolve().parent
     environment = root / ".venv"
     python = environment / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
